@@ -1,6 +1,12 @@
 ### 08-ansible-02-playbook
 
-Playbook производит установку и настройку clickhouse и vector.
+Playbook производит установку и настройку clickhouse, vector и lighthouse.
+
+![VM](./img/VM.JPG)
+
+![ansible](./img/ansible.JPG)
+
+![VM](./img/lighthouse.JPG)
 
 ### Clickhouse
 - установка clickhouse
@@ -10,6 +16,9 @@ Playbook производит установку и настройку clickhous
 - установка vector
 - изменение конфига приложения
 
+### Lighthouse
+- установка lighthouse
+- настройка nginx
 ---
 
 ### Variables
@@ -22,4 +31,5 @@ Playbook производит установку и настройку clickhous
 ### Tags
 - vector производит полную конфигурацию vector
 - vector_config производит изменение в конфиге приложения vector
+- lighthouse производит установку lighthouse
 

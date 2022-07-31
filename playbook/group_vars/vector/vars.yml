@@ -1,5 +1,4 @@
----
-vector_version: "0.23.0-1"
+vector_installer_url: https://packages.timber.io/vector/0.23.0/vector_0.23.0-1_amd64.deb
 vector_config:
   sources:
     dummy_logs:
@@ -21,7 +20,7 @@ vector_config:
       inputs:
         - parse_logs
       database: logs2
-      endpoint: 'http://localhost:8123'
+      endpoint: 'http://clickhouse01:8123'
       table: log
       compression: gzip
   api:

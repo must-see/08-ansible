@@ -1,12 +1,13 @@
 ---
 - name: Install Clickhouse
+  tags: clickhouse
   hosts: clickhouse
   handlers:
     - name: Start clickhouse service
       become: true
       ansible.builtin.service:
         name: clickhouse-server
-        state: restarted       
+        state: restarted
   tasks:
     - block:
         - name: Get clickhouse distrib
@@ -26,26 +27,21 @@
           - clickhouse-common-static-{{ clickhouse_version }}.rpm
           - clickhouse-client-{{ clickhouse_version }}.rpm
           - clickhouse-server-{{ clickhouse_version }}.rpm
-      notify: Start clickhouse service    
+      notify: Start clickhouse service
     - name: Enable remote connections to clickhouse server
       become: true
       ansible.builtin.lineinfile:
         path: /etc/clickhouse-server/config.xml
-        regexp: <!-- * <listen_host>::1</listen_host> * -->
-        line: <listen_host>0.0.0.0</listen_host>
-    
-    - name: UP clickhouse-server
-      ansible.builtin.command: "clickhouse-server --daemon"
-    
+        regexp: <!-- <listen_host>::</listen_host> -->
+        line: <listen_host>::</listen_host>
     - name: Flush handlers
-      meta: flush_handlers    
-    
+      meta: flush_handlers
     - name: Create database
-      ansible.builtin.command: "clickhouse-client -q 'create database logs2;'"
+      tags: clickhouse_db
+      ansible.builtin.command: "clickhouse-client -q 'create database {{ clickhouse_database_name }};'"
       register: create_db
       failed_when: create_db.rc != 0 and create_db.rc !=82
       changed_when: create_db.rc == 0
-
     - name: Create log table
       tags: clickhouse_db
       ansible.builtin.command:
@@ -59,7 +55,6 @@
       register: create_table
       failed_when: create_table.rc != 0 and create_table.rc !=57 # table already exists
       changed_when: create_table.rc == 0
-    
 
 - name: Install Vector
   tags: vector
@@ -67,7 +62,7 @@
   handlers:
     - name: Start Vector service
       become: true
-      ansible.builtin.systemd:
+      ansible.builtin.service:
         name: vector
         state: restarted
   tasks:
@@ -76,20 +71,20 @@
       lineinfile:
         dest: /etc/hosts
         regexp: '.*{{ item }}$'
-        line: "{{ hostvars[item].ansible_host }} {{ item }}"
+        line: "{{ hostvars[item].ansible_host }} {{item}}"
         state: present
       when: hostvars[item].ansible_host is defined
       with_items: "{{ groups.clickhouse }}"
     - block:
         - name: Get vector distrib
           ansible.builtin.get_url:
-            url: "https://packages.timber.io/vector/latest/vector_{{ vector_version }}_amd64.deb"
-            dest: "./vector_{{ vector_version }}_amd64.deb"
+            url: "{{ vector_installer_url }}"
+            dest: "./vector.deb"
         - name: Install vector package
           become: true
-          ansible.builtin.apt:            
-            deb: ./vector_{{ vector_version }}_amd64.deb
-                      
+          apt:
+            deb: "./vector.deb"
+          
         - name: Redefine vector config name
           tags: vector_config
           become: true
@@ -105,3 +100,53 @@
             content: |
               {{ vector_config | to_nice_yaml(indent=2) }}
       notify: Start Vector service
+
+- name: Install Lighthouse
+  tags: lighthouse
+  hosts: lighthouse
+  handlers:
+    - name: Start nginx service
+      become: true
+      ansible.builtin.service:
+        name: nginx
+        state: restarted
+  tasks:
+    - name: Add clickhouse addresses to /etc/hosts
+      become: true
+      lineinfile:
+        dest: /etc/hosts
+        regexp: '.*{{ item }}$'
+        line: "{{ hostvars[item].ansible_host }} {{item}}"
+        state: present
+      when: hostvars[item].ansible_host is defined
+      with_items: "{{ groups.clickhouse }}"
+    - name: Install required packages
+      become: true
+      ansible.builtin.yum:
+        name:
+          - epel-release
+          - unzip
+    - name: Install nginx
+      become: true
+      ansible.builtin.yum:
+        name:
+          - nginx
+    - block:
+        - name: Get lighthouse distrib
+          ansible.builtin.get_url:
+            url: "{{ lighthouse_distrib }}"
+            dest: ./lighthouse.zip
+        - name: Unpack lighthouse archive
+          become: true
+          ansible.builtin.unarchive:
+            src: ./lighthouse.zip
+            dest: /usr/share/nginx
+            remote_src: yes
+        - name: Nginx configuration
+          tags: nginx_config
+          become: true
+          ansible.builtin.copy:
+            dest: /etc/nginx/conf.d/lighthouse.conf
+            content: |
+              {{ nginx_conf }}           
+      notify: Start nginx service
